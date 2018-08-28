@@ -24,6 +24,9 @@
 #include "surf.h"
 #include "memory.h"
 #include "error.h"
+#ifdef DATAWARP
+#include "datawarp_cxx.h"
+#endif
 
 using namespace SPARTA_NS;
 
@@ -42,8 +45,6 @@ enum{VERSION,SMALLINT,CELLINT,BIGINT,
      NPARTICLE,NUNSPLIT,NSPLIT,NSUB,NPOINT,NSURF,
      SPECIES,MIXTURE,PARTICLE_CUSTOM,GRID,SURF,
      MULTIPROC,PROCSPERFILE,PERPROC};    // new fields added after PERPROC
-
-/* ---------------------------------------------------------------------- */
 
 WriteRestart::WriteRestart(SPARTA *sparta) : Pointers(sparta)
 {
@@ -93,6 +94,7 @@ void WriteRestart::command(int narg, char **arg)
   // write single restart file
 
   write(file);
+
   delete [] file;
 }
 
@@ -176,7 +178,8 @@ void WriteRestart::write(char *file)
   // open single restart file or base file for multiproc case
 
   if (me == 0) {
-    char *hfile;
+    // moved following to write_restart.h
+    //    char *hfile;
     if (multiproc) {
       hfile = new char[strlen(file) + 16];
       char *ptr = strchr(file,'%');
@@ -190,7 +193,10 @@ void WriteRestart::write(char *file)
       sprintf(str,"Cannot open restart file %s",hfile);
       error->one(FLERR,str);
     }
-    if (multiproc) delete [] hfile;
+    /* I need to hang on the the 'hfile' char string for the DataWarp
+       calls to be done later on. Will execute the following deletion
+       near the end of this funciton. */
+    //  if (multiproc) delete [] hfile;
   }
 
   // proc 0 writes magic string, endian flag, numeric version
@@ -240,7 +246,7 @@ void WriteRestart::write(char *file)
   if (multiproc) {
     if (me == 0) fclose(fp);
 
-    char *multiname = new char[strlen(file) + 16];
+    multiname = new char[strlen(file) + 16];
     char *ptr = strchr(file,'%');
     *ptr = '\0';
     sprintf(multiname,"%s%d%s",file,icluster,ptr+1);
@@ -255,8 +261,9 @@ void WriteRestart::write(char *file)
       }
       write_int(PROCSPERFILE,nclusterprocs);
     }
-
-    delete [] multiname;
+    /* Also want to wait to delete this dynamic string array until
+       the DataWarp calls using it have are done. */
+    //delete [] multiname;
   }
 
   // pack my child grid and particle data into buf
@@ -285,8 +292,32 @@ void WriteRestart::write(char *file)
       write_char_vec(PERPROC,recv_size,buf);
     }
     fclose(fp);
+  //CONEGA-20180720: introducing DataWarp API calls
+#ifdef DATAWARP
+    // for now have the Parallel File System target directory specified by the PFS_STAGEOUT_DIR
+    // environment variable.
+    char* pfs_dpath = getenv("PFS_STAGEOUT_DIR");
 
-  } else {
+    if (NULL != pfs_dpath){
+      char *pfs_fpath;
+      pfs_fpath = new char[strlen(pfs_dpath) + 1 + strlen(hfile)];
+      sprintf(pfs_fpath, "%s/%s", pfs_dpath, hfile);
+      int dwret1 = dw_stage_file_out(hfile, pfs_fpath, DW_STAGE_IMMEDIATE);
+      int dwret2 = dw_stage_file_out(multiname, pfs_fpath, DW_STAGE_IMMEDIATE);
+      if(0 != dwret1 + dwret2){
+        error->all(FLERR, "Trouble with dw_stage_file_out.");
+      }    
+    }else{
+      error->all(FLERR, "Need to set PFS_STAGEOUT_DIR environment variable to the full PFS target path.");
+    }
+#endif
+    // Now delete the temporary buffers for the file-names:
+    if (multiproc){
+      if (me == 0) delete [] hfile;
+      delete [] multiname;
+    }
+    
+  }  else {
     MPI_Recv(&tmp,0,MPI_INT,fileproc,0,world,&status);
     MPI_Rsend(buf,send_size,MPI_CHAR,fileproc,0,world);
   }

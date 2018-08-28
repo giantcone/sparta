@@ -25,6 +25,9 @@
 #include "output.h"
 #include "memory.h"
 #include "error.h"
+#ifdef DATAWARP
+#include "datawarp_cxx.h"
+#endif
 
 using namespace SPARTA_NS;
 
@@ -152,6 +155,23 @@ Dump::~Dump()
       if (filewriter) fclose(fp);
     }
   }
+  /* CONEGA-20180806: introducing DataWarp API calls to force manual
+                      stageout of data to the Parallel File System 
+  */
+  #ifdef DATAWARP
+  char *pfs_dpath = getenv("PFS_STAGEOUT_DIR");
+  if (NULL != pfs_dpath){
+    char *pfs_fpath = new char[strlen(pfs_dpath) + 1 + strlen(filename)];
+    sprintf(pfs_fpath, "%s/%s", pfs_dpath, filename);
+    int dwret =dw_stage_file_out(filename, pfs_dpath, DW_STAGE_IMMEDIATE);
+    if (0 != dwret){
+      error->all(FLERR, "Trouble with dw_stage_file_out of dump file.");
+    }
+  }
+  else{
+      error->all(FLERR, "Need to set PFS_STAGEOUT_DIR environment variable to the full PFS target path.");
+    }
+#endif
 }
 
 /* ---------------------------------------------------------------------- */

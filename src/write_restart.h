@@ -37,6 +37,10 @@ class WriteRestart : protected Pointers {
   int me,nprocs;
   FILE *fp;
 
+  // moving definitions of the output file name pointers to here
+  char *hfile;
+  char *multiname;
+
   int multiproc;             // 0 = proc 0 writes for all
                              // else # of procs writing files
   int nclusterprocs;         // # of procs in my cluster that write to one file
