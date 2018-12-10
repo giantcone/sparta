@@ -61,6 +61,10 @@ action compute_lambda_grid_kokkos.cpp
 action compute_lambda_grid_kokkos.h
 action compute_pflux_grid_kokkos.cpp
 action compute_pflux_grid_kokkos.h
+action compute_sonine_grid_kokkos.cpp
+action compute_sonine_grid_kokkos.h
+action compute_surf_kokkos.cpp
+action compute_surf_kokkos.h
 action compute_temp_kokkos.cpp
 action compute_temp_kokkos.h
 action compute_thermal_grid_kokkos.cpp
